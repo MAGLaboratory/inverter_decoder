@@ -1,6 +1,7 @@
 ##
-## This file is part of the libsigrokdecode project.
+## This file was part of the libsigrokdecode project.
 ##
+## Copyright (C) 2026 Brandon Kirisaki <mbededsystms@gmail.com>
 ## Copyright (C) 2016 Vladimir Ermakov <vooon341@gmail.com>
 ##
 ## This program is free software; you can redistribute it and/or modify
@@ -14,12 +15,11 @@
 ## GNU General Public License for more details.
 ##
 ## You should have received a copy of the GNU General Public License
-## along with this program; if not, write to the Free Software
-## Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+## along with this program; if not, see <http://www.gnu.org/licenses/>.
 ##
 
 '''
-Decode WS2812 RGB LED signal
+Inverter (zetawale) control panel decoder
 '''
 
 from .pd import Decoder

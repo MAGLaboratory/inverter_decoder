@@ -1,14 +1,63 @@
-rgb\_led\_ws281x decoder
+Inverter Control Panel Decoder
 ========================
 
 Simple and naive decoder, but it works.
 
-[Merged into upstream 4 Mar 2016.](http://comments.gmane.org/gmane.comp.debugging.sigrok.devel/1965)
+Notes
+-----
+This decoder is currently a work in progress and does not implement serious
+functionality.
 
-![PulseView start](https://raw.githubusercontent.com/vooon/sigrok-rgb_led_ws281x/master/pulseview-start.png)
+Tests are not run on the code and no linter is used to check for code quality.
 
-![PulseView end](https://raw.githubusercontent.com/vooon/sigrok-rgb_led_ws281x/master/pulseview-end.png)
+User discretion is advised.
 
+Concept of Execution
+--------------------
+The bit data from communications is often noisy.  The bus idle state is high.
+Measured bit timing is 410 us.  `0` bits are 320 us of logic low followed by
+90 us of logic high.  `1` bits are 120 us of logic high followed by 290 us of
+logic high.
+
+The bit data is first run through `debouncer.py`.
+
+The debounced data is run through falling edge detection.
+
+Between the two falling edges, the 50% point is detected and sampled.  If the
+sample is logic low, the bit is  `0`.  If the sample is logic high, the bit is
+`1`.
+
+Protocol Description
+--------------------
+The protocol is implemented in a relatively straightforward manner...
+Each byte is sent LSB first and repeated twice.
+
+Data in the sent packet is always 6 bytes long and can be grouped into 
+nibbles.
+
+<table>
+    <tr>
+        <td>0</td>
+        <td>1</td>
+        <td>2</td>
+        <td>3</td>
+        <td>4</td>
+        <td>5</td>
+        <td>6</td>
+        <td>7</td>
+        <td>8</td>
+        <td>9</td>
+        <td>10</td>
+        <td>11</td>
+    </tr>
+    <tr>
+        <td colspan=2>Unk</td>
+        <td colspan=3>Input voltage x48</td>
+        <td>Unk</td>
+        <td colspan=2>Output Voltage</td>
+        <td colspan=4>Wattage x7</td>
+    </tr>
+</table>
 
 Installation
 ------------

@@ -1,6 +1,7 @@
 ##
-## This file is part of the libsigrokdecode project.
+## This file was part of the libsigrokdecode project.
 ##
+## Copyright (C) 2026 Brandon Kirisaki <b.k.lu@ieee.org>
 ## Copyright (C) 2016 Vladimir Ermakov <vooon341@gmail.com>
 ##
 ## This program is free software; you can redistribute it and/or modify
@@ -14,120 +15,155 @@
 ## GNU General Public License for more details.
 ##
 ## You should have received a copy of the GNU General Public License
-## along with this program; if not, write to the Free Software
-## Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+## along with this program; if not, see <http://www.gnu.org/licenses/>.
 ##
 
 import sigrokdecode as srd
 from functools import reduce
+from .debounce import Debounce
 
 class SamplerateError(Exception):
     pass
 
 class Decoder(srd.Decoder):
-    api_version = 2
-    id = 'rgb_led_ws281x'
-    name = 'RGB LED (WS281x)'
-    longname = 'RGB LED string decoder (WS281x)'
-    desc = 'RGB LED string protocol (WS281x).'
+    api_version = 3
+    id = 'inverter_control_panel'
+    name = 'Inverter Control Panel Decoder'
+    longname = 'Inverter single-wire communication protocol decoder'
+    desc = 'Inverter control panel decoder'
     license = 'gplv3+'
     inputs = ['logic']
-    outputs = ['rgb_led_ws281x']
+    outputs = []
+    tags = ['Display', 'Panel', 'Power']
     channels = (
         {'id': 'din', 'name': 'DIN', 'desc': 'DIN data line'},
+    )
+    options = (
+        {'id': 'debounce', 'desc': 'Number of samples to debounce',
+            'default': 3, 'values': tuple(range(83))},
     )
     annotations = (
         ('bit', 'Bit'),
         ('reset', 'RESET'),
-        ('rgb', 'RGB'),
+        ('byte', 'Byte'),
+        ('dup', 'Duplicate'),
     )
     annotation_rows = (
         ('bit', 'Bits', (0, 1)),
-        ('rgb', 'RGB', (2, )),
+        ('byte', 'Byte', (2,)),
+        ('dup', 'Duplication', (3,)),
     )
 
-    def __init__(self, **kwargs):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
         self.samplerate = None
-        self.oldpin = None
-        self.packet_ss = None
-        self.start_samplenum = None
-        self.end_samplenum = None
+        self.olddpin = None
+        self.ss_packet = None
+        self.sss_packet = None
+        self.ss = None
+        self.es = None
         self.bits = []
+        self.bytes = []
         self.inreset = False
 
     def start(self):
         self.out_ann = self.register(srd.OUTPUT_ANN)
+        self.debounce = Debounce(None, self.options['debounce'])
 
     def metadata(self, key, value):
         if key == srd.SRD_CONF_SAMPLERATE:
             self.samplerate = value
 
     def handle_bits(self, samplenum):
-        if len(self.bits) == 24:
-            grb = reduce(lambda a, b: (a << 1) | b, self.bits)
-            rgb = (grb & 0xff0000) >> 8 | (grb & 0x00ff00) << 8 | (grb & 0x0000ff)
-
-            self.put(self.packet_ss, samplenum, self.out_ann,
-                     [2, ['#%06x' % rgb]])
-
+        if len(self.bits) == 8:
+            self.bits = reversed(self.bits)
+            byte = reduce(lambda a, b: (a << 1) | b, self.bits)
+            self.put(self.ss_packet, samplenum, self.out_ann,
+                     [2, ['0x%02X' % byte]])
+            self.bytes.append(byte)
             self.bits = []
-            self.packet_ss = None
+            self.ss_packet = None
 
-    def decode(self, ss, es, data):
+    def handle_bytes(self, samplenum):
+        if len(self.bytes) == 2:
+            if self.bytes[0] == self.bytes[1]:
+                self.put(self.sss_packet, samplenum, self.out_ann, 
+                     [3, [f"OK 0x{self.bytes[0]:02X}"]])
+            else:
+                self.put(self.sss_packet, samplenum, self.out_ann, 
+                     [3, [f"NO 0x{self.bytes[0]:02X}"]])
+
+            self.bytes = []
+            self.sss_packet = None
+
+
+    def decode(self):
         if not self.samplerate:
             raise SamplerateError('Cannot decode without samplerate.')
 
-        for (samplenum, (pin, )) in data:
-            # NOTE: timings
-            # https://cpldcpu.wordpress.com/2014/01/14/light_ws2812-library-v2-0-part-i-understanding-the-ws2812/
+        while True:
+            # TODO: Come up with more appropriate self.wait() conditions.
+            # pin is the value of the pin
+            (pin,) = self.wait()
 
-            if self.oldpin is None:
-                self.oldpin = pin
+            dpin = self.debounce.update(pin)
+
+            if self.olddpin is None:
+                self.olddpin = dpin
                 continue
 
-            # check RESET condition (mfg recommend 50 usec minimal, but real minimum is ~10 usec)
-            if not self.inreset and not pin and \
-               self.end_samplenum is not None and \
-               (samplenum - self.end_samplenum) / self.samplerate > 50e-6:
-                # decode last bit value
-                tH = (self.end_samplenum - self.start_samplenum) / self.samplerate
-                bit_ = True if tH >= 625e-9 else False
+            # Check RESET condition
+            if not self.inreset and pin and self.es is not None and \
+                    self.ss is not None and \
+                    (self.samplenum - self.es) / self.samplerate > 10e-3:
+
+                # Decode last bit value.
+                tL = (self.es - self.ss) / self.samplerate
+                bit_ = False if tL >= 205e-6 else True
 
                 self.bits.append(bit_)
-                self.handle_bits(self.end_samplenum)
+                self.handle_bits(self.es)
+                self.handle_bytes(self.es)
 
-                self.put(self.start_samplenum, self.end_samplenum, self.out_ann,
-                         [0, ['%d' % bit_]])
-                self.put(self.end_samplenum, samplenum, self.out_ann,
+                self.put(self.ss, self.es, self.out_ann, [0, ['%d' % bit_]])
+                self.put(self.es, self.samplenum, self.out_ann,
                          [1, ['RESET', 'RST', 'R']])
 
                 self.inreset = True
                 self.bits = []
-                self.packet_ss = None
-                self.start_samplenum = None
+                self.ss_packet = None
+                self.bytes = []
+                self.sss_packet = None
+                self.ss = None
 
-            if not self.oldpin and pin:
-                # Rising enge
-                if self.start_samplenum and self.end_samplenum:
-                    period = samplenum - self.start_samplenum
-                    duty = self.end_samplenum - self.start_samplenum
-                    # ideal duty for T0H: 33%, T1H: 66%
-                    bit_ = (duty / period) > 0.5
+            if  self.olddpin and not dpin:
+                # falling edge.
+                if self.ss and self.es:
+                    period = self.samplenum - self.ss
+                    duty = self.es - self.ss
+                    # Ideal duty for T0H: 33%, T1H: 66%.
+                    bit_ = (duty / period) < 0.5
 
-                    self.put(self.start_samplenum, samplenum, self.out_ann,
+                    self.put(self.ss, self.samplenum, self.out_ann,
                              [0, ['%d' % bit_]])
 
                     self.bits.append(bit_)
-                    self.handle_bits(samplenum)
+                    self.handle_bits(self.samplenum)
+                    self.handle_bytes(self.samplenum)
 
-                if self.packet_ss is None:
-                    self.packet_ss = samplenum
+                if self.ss_packet is None:
+                    self.ss_packet = self.samplenum
 
-                self.start_samplenum = samplenum
+                if self.sss_packet is None:
+                    self.sss_packet = self.samplenum
 
-            elif self.oldpin and not pin:
-                # Falling edge
+                self.ss = self.samplenum
+
+            elif not self.olddpin and dpin:
+                # rising edge.
                 self.inreset = False
-                self.end_samplenum = samplenum
+                self.es = self.samplenum
 
-            self.oldpin = pin
+            self.olddpin = dpin
