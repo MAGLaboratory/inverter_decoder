@@ -5,8 +5,7 @@ Simple and naive decoder, but it works.
 
 Notes
 -----
-This decoder is currently a work in progress and does not implement serious
-functionality.
+This decoder is currently a work in progress.
 
 Tests are not run on the code and no linter is used to check for code quality.
 
@@ -65,5 +64,5 @@ Installation
 ```
 mkdir -p ~/.local/share/libsigrokdecode/decoders
 cd ~/.local/share/libsigrokdecode/decoders
-git clone https://github.com/vooon/sigrok-rgb_led_ws281x.git rgb_led_ws281x
+git clone https://github.com/MAGLaboratory/inverter_decoder/
 ```

@@ -40,18 +40,22 @@ class Decoder(srd.Decoder):
     )
     options = (
         {'id': 'debounce', 'desc': 'Number of samples to debounce',
-            'default': 3, 'values': tuple(range(83))},
+            'default': 3, 'values': tuple(range(100))},
     )
     annotations = (
         ('bit', 'Bit'),
         ('reset', 'RESET'),
         ('byte', 'Byte'),
         ('dup', 'Duplicate'),
+        ('iv', 'Input Voltage'),
+        ('ov', 'Output Voltage'),
+        ('w', 'Wattage'),
     )
     annotation_rows = (
         ('bit', 'Bits', (0, 1)),
         ('byte', 'Byte', (2,)),
         ('dup', 'Duplication', (3,)),
+        ('dec', 'Decode', (4,5,6)),
     )
 
     def __init__(self):
@@ -66,6 +70,9 @@ class Decoder(srd.Decoder):
         self.es = None
         self.bits = []
         self.bytes = []
+        self.nibbles = []
+        self.nl = []
+        self.nibble = []
         self.inreset = False
 
     def start(self):
@@ -83,6 +90,7 @@ class Decoder(srd.Decoder):
             self.put(self.ss_packet, samplenum, self.out_ann,
                      [2, ['0x%02X' % byte]])
             self.bytes.append(byte)
+            self.nl.append(self.ss_packet)
             self.bits = []
             self.ss_packet = None
 
@@ -91,6 +99,8 @@ class Decoder(srd.Decoder):
             if self.bytes[0] == self.bytes[1]:
                 self.put(self.sss_packet, samplenum, self.out_ann, 
                      [3, [f"OK 0x{self.bytes[0]:02X}"]])
+                self.nibbles.append(self.bytes[0] >> 4)
+                self.nibbles.append(self.bytes[0] & 0xF)
             else:
                 self.put(self.sss_packet, samplenum, self.out_ann, 
                      [3, [f"NO 0x{self.bytes[0]:02X}"]])
@@ -98,6 +108,21 @@ class Decoder(srd.Decoder):
             self.bytes = []
             self.sss_packet = None
 
+    def handle_decode(self):
+        if len(self.nibbles) == 12 and len(self.nl) == 13:
+            iv = reduce(lambda a, b: (a << 4) | b, self.nibbles[2:5])
+            iv /= 48
+            self.put(self.nl[2], self.nl[5], self.out_ann,
+                [4, [f"{iv:.2f}"]])
+            ov = reduce(lambda a, b: (a << 4) | b, self.nibbles[6:8])
+            self.put(self.nl[6], self.nl[8], self.out_ann,
+                [5, [f"{ov}"]])
+            w = reduce(lambda a, b: (a << 4) | b, self.nibbles[8:12])
+            w //= 7
+            self.put(self.nl[8], self.nl[12], self.out_ann,
+                [6, [f"{w}"]])
+            
+        
 
     def decode(self):
         if not self.samplerate:
@@ -131,12 +156,18 @@ class Decoder(srd.Decoder):
                 self.put(self.es, self.samplenum, self.out_ann,
                          [1, ['RESET', 'RST', 'R']])
 
+                self.nl.append(self.es)
+                self.handle_decode()
+
                 self.inreset = True
                 self.bits = []
                 self.ss_packet = None
                 self.bytes = []
+                self.nibbles = []
+                self.nl = []
                 self.sss_packet = None
                 self.ss = None
+                self.nibble = []
 
             if  self.olddpin and not dpin:
                 # falling edge.
