@@ -66,3 +66,9 @@ mkdir -p ~/.local/share/libsigrokdecode/decoders
 cd ~/.local/share/libsigrokdecode/decoders
 git clone https://github.com/MAGLaboratory/inverter_decoder/
 ```
+
+Thanks
+------
+Thanks are owed to the original author of the `ws281x` decoder for libsigrokdecoders: Vladimir Ermakov https://github.com/vooon 
+
+This repository was originally forked from their repository and deviated enough from the original that it made sense to separate it from the fork network.  The original code is available at the following repository: https://github.com/vooon/sigrok-rgb_led_ws281x 
