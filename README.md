@@ -3,6 +3,8 @@ Inverter Control Panel Decoder
 
 Simple and naive decoder, but it works.
 
+![Image of the protocol decoder featuring the various fields that are supposed to be decoded](/img/screenshot.png)
+
 Notes
 -----
 This decoder is currently a work in progress.
