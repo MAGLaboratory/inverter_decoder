@@ -54,7 +54,7 @@ nibbles.
     <tr>
         <td colspan=2>Unk</td>
         <td colspan=3>Input voltage x48</td>
-        <td>Unk</td>
+        <td>Fan Status?  `0xB`: Off; `0xF`: On</td>
         <td colspan=2>Output Voltage</td>
         <td colspan=4>Wattage x7</td>
     </tr>
