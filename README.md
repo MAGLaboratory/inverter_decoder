@@ -52,7 +52,8 @@ nibbles.
         <td>11</td>
     </tr>
     <tr>
-        <td colspan=2>Unk</td>
+        <td>Unk</td>
+        <td>System Nibble<br>`0x2`: Normal<br>`0x4`: Button Down<br>`0x1`: Shutting Down<br>`0x8`: Shutdown</td>
         <td colspan=3>Input voltage x48</td>
         <td>Utility Nibble<br>`0xB`: Fan Off<br>`0xF`: Fan On<br>`0x5`: Inv Off</td>
         <td colspan=2>Output Voltage</td>
