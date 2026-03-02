@@ -7,8 +7,6 @@ Simple and naive decoder, but it works.
 
 Notes
 -----
-This decoder is currently a work in progress.
-
 Tests are not run on the code and no linter is used to check for code quality.
 
 User discretion is advised.
